@@ -19,13 +19,23 @@ void function (global) {
         if (!notification) {
             notification = L.DomUtil.create('div', 'notification', document.body);
             notification.style.position = 'fixed';
-            notification.style.bottom = '20px';
-            notification.style.right = '20px';
+            notification.style.top = '50%'; // Center vertically
+            notification.style.left = '50%'; // Center horizontally
+            notification.style.transform = 'translate(-50%, -50%)'; // Adjust to exact center
             notification.style.background = 'rgba(0, 0, 0, 0.7)';
             notification.style.color = 'white';
-            notification.style.padding = '10px';
+            notification.style.padding = '8px 20px'; // Adjust padding to fit within the height
             notification.style.borderRadius = '5px';
             notification.style.zIndex = '2000';
+            notification.style.fontSize = '24px'; // Current large font size for visibility
+            notification.style.textAlign = 'center'; // Center text inside the notification
+            notification.style.width = '300px'; // Set width to 250 pixels
+            notification.style.height = '50px'; // Set height to 35 pixels
+            notification.style.lineHeight = '35px'; // Align the text vertically in the center
+            notification.style.boxSizing = 'border-box'; // Include padding in dimensions
+            notification.style.overflow = 'hidden'; // Hide any overflow to maintain box size
+            notification.style.whiteSpace = 'nowrap'; // Prevent text from wrapping to maintain a single line
+            notification.style.textOverflow = 'ellipsis'; // Add ellipsis if text exceeds the width
         }
         notification.textContent = text;
         notification.style.display = 'block';
@@ -60,36 +70,104 @@ void function (global) {
 
     L.Control.AreaGeneration = L.Control.extend({
         onAdd: function(map) {
+            this._map = map;
             var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
             var link = L.DomUtil.create('a', '', container);
             link.href = '#';
             link.title = 'Generate Area';
             link.innerHTML = 'Area';
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
-                      .on(link, 'click', function() {
-                          this._toggleTextbox('Area generation data...');
-                      }, this);
+                      .on(link, 'click', this._toggleTextbox, this);
+            this.clickCount = 0;
+            this.firstCoord = null;
+            this.secondCoord = null;
+            this.areaLayer = null;
+            map.on('click', this._mapClick, this);
             return container;
         },
 
-        _toggleTextbox: function(text) {
+        _toggleTextbox: function() {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
-                this._textbox.textContent = text;
-                L.DomEvent.on(this._textbox, 'click', function() {
-                    navigator.clipboard.writeText(this.textContent);
-                    alert('Text copied to clipboard!');
+                this._textbox.textContent = 'Click map to select area...';
+                this._textbox.style.display = 'block';
+                L.DomEvent.on(this._textbox, 'click', function(e) {
+                    navigator.clipboard.writeText(this.textContent).then(() => {
+                        showNotification('Text copied to clipboard!');
+                    }).catch(err => {
+                        showNotification('Failed to copy data: ' + err);
+                    });
+                    L.DomEvent.stop(e);  // Prevent map click event
                 });
             } else {
-                if (this._textbox.style.display === 'none') {
-                    this._textbox.style.display = 'block';
-                    this._textbox.textContent = text;
-                    this._textbox.style.right = '80px'; // Adjusted right positioning
-                    this._textbox.style.height = '250px'; // Ensure consistent height
-                } else {
-                    this._textbox.style.display = 'none';
+                this._textbox.style.display = (this._textbox.style.display === 'none') ? 'block' : 'none';
+                this.clickCount = 0; // Reset clicks when toggling
+                if (this.areaLayer) {
+                    this._map.removeLayer(this.areaLayer);  // Remove the drawn area if any
+                    this.areaLayer = null;
                 }
             }
+        },
+
+        _mapClick: function(e) {
+            if (this._textbox && this._textbox.style.display !== 'none') {
+                let coords = this._convertMapCoords(e.latlng.lat, e.latlng.lng);
+                if (this.clickCount === 0) {
+                    this.firstCoord = coords;
+                    this._textbox.textContent = 'First corner selected...';
+                    this.clickCount++;
+                } else if (this.clickCount === 1) {
+                    this.secondCoord = coords;
+                    this._drawArea();
+                    this._textbox.innerHTML = `<pre>new Area(\n\tnew Tile(${this.firstCoord}), \n\tnew Tile(${this.secondCoord})\n);</pre>`;
+                    this.clickCount = 0; // Reset for new area selection
+                }
+            }
+        },
+
+        _drawArea: function() {
+            if (this.areaLayer) {
+                this._map.removeLayer(this.areaLayer);
+            }
+            let firstLatLng = this._map.containerPointToLatLng(this._getPointFromCoord(this.firstCoord));
+            let secondLatLng = this._map.containerPointToLatLng(this._getPointFromCoord(this.secondCoord));
+            this.areaLayer = L.rectangle([firstLatLng, secondLatLng], {color: "#ff7800", weight: 1});
+            this.areaLayer.addTo(this._map);
+            this.areaLayer.bringToFront(); // Ensure the rectangle is on top of other layers
+        },
+
+        _convertMapCoords: function(lat, lng) {
+            let globalX = parseInt(lng);
+            let globalY = parseInt(lat);
+            let plane = this._map.getPlane(); // This method needs to be accurate
+            let converted = this.convert(plane, globalX, globalY);
+            let deConverted = this.deConvert(plane, converted.i, converted.j, converted.x, converted.y);
+            let modifiedX = deConverted.globalX * 4;
+            let modifiedY = deConverted.globalY * 4 - 254;
+            return `${modifiedX}, ${modifiedY}, ${plane}`;
+        },
+
+        _getPointFromCoord: function(coord) {
+            let parts = coord.split(", ");
+            return new L.Point(parseInt(parts[0]), parseInt(parts[1]));
+        },
+
+        convert: function (_plane, _globalX, _globalY) {
+            return {
+                plane: _plane,
+                i: _globalX >> 6,
+                j: _globalY >> 6,
+                x: _globalX & 0x3F,
+                y: _globalY & 0x3F,
+            };
+        },
+
+        deConvert: function (_plane, _i, _j, _x, _y) {
+            return {
+                plane: _plane,
+                globalX: _i << 6 | _x,
+                globalY: _j << 6 | _y
+            };
         }
     });
 
@@ -100,31 +178,106 @@ void function (global) {
             link.href = '#';
             link.title = 'Generate Path';
             link.innerHTML = 'Path';
+
+            // Track if path generation is active
+            this.isActive = false;
+            this.pathPoints = [];  // Stores clicked path points
+
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
-                      .on(link, 'click', function() {
-                          this._toggleTextbox('Path generation data...');
-                      }, this);
+                .on(link, 'click', function() {
+                    this._togglePathGeneration(map);  // Toggle path generation mode
+                }, this);
+
             return container;
+        },
+
+        _togglePathGeneration: function(map) {
+            this.isActive = !this.isActive;  // Toggle active state
+
+            if (this.isActive) {
+                this.pathPoints = [];  // Reset path when starting new
+                this._toggleTextbox('Click to generate a path...');
+                map.on('click', this._handleMapClick, this);  // Start listening for clicks
+            } else {
+                this._textbox.style.display = 'none';  // Hide text box when deactivated
+                map.off('click', this._handleMapClick, this);  // Stop listening for clicks
+            }
         },
 
         _toggleTextbox: function(text) {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
-                L.DomEvent.on(this._textbox, 'click', function() {
-                    navigator.clipboard.writeText(this.textContent);
-                    alert('Text copied to clipboard!');
-                });
+                this._textbox.style.right = '80px';
+                this._textbox.style.height = '250px';  // Ensure consistent height
+
+                // Add copy-to-clipboard functionality
+                L.DomEvent.on(this._textbox, 'click', function(e) {
+                    L.DomEvent.stop(e);  // Prevent triggering map clicks when clicking on the textbox
+
+                    navigator.clipboard.writeText(this._textbox.textContent).then(() => {
+                        showNotification('Text copied to clipboard!');
+                    }).catch(err => {
+                        showNotification('Failed to copy data: ' + err);
+                    });
+                }, this);  // Ensure correct "this" context
             } else {
-                if (this._textbox.style.display === 'none') {
-                    this._textbox.style.display = 'block';
-                    this._textbox.textContent = text;
-                    this._textbox.style.right = '80px'; // Adjusted right positioning
-                    this._textbox.style.height = '250px'; // Ensure consistent height
-                } else {
-                    this._textbox.style.display = 'none';
-                }
+                this._textbox.style.display = 'block';  // Show textbox if hidden
+                this._textbox.textContent = text;
             }
+        },
+
+        _handleMapClick: function(e) {
+            let coords = this._convertMapCoords(e.latlng.lat, e.latlng.lng);
+            this.pathPoints.push(coords);  // Add point to path
+
+            // Update the path in the text box
+            this._updateTextbox();
+        },
+
+        // Updates the textbox with the current path data
+        _updateTextbox: function() {
+            if (this.pathPoints.length > 0) {
+                let pathText = 'Tile[] path = new Tile[] {\n';
+                this.pathPoints.forEach((coord, index) => {
+                    pathText += `\tnew Tile(${coord})`;
+                    if (index < this.pathPoints.length - 1) {
+                        pathText += ',\n';  // Add a comma between coordinates, except the last one
+                    }
+                });
+                pathText += '\n};';
+                this._textbox.innerHTML = `<pre>${pathText}</pre>`;
+            }
+        },
+
+        // Formats the coordinates as Mufasa-style Tile, same as area generator
+        _convertMapCoords: function(lat, lng) {
+            let globalX = parseInt(lng);
+            let globalY = parseInt(lat);
+            let plane = this._map.getPlane();  // Get the current plane
+            let converted = this.convert(plane, globalX, globalY);
+            let deConverted = this.deConvert(plane, converted.i, converted.j, converted.x, converted.y);
+            let modifiedX = deConverted.globalX * 4;
+            let modifiedY = deConverted.globalY * 4 - 254;
+            return `${modifiedX}, ${modifiedY}, ${plane}`;
+        },
+
+        convert: function (_plane, _globalX, _globalY) {
+            return {
+                plane: _plane,
+                i: _globalX >> 6,
+                j: _globalY >> 6,
+                x: _globalX & 0x3F,
+                y: _globalY & 0x3F,
+            };
+        },
+
+        deConvert: function (_plane, _i, _j, _x, _y) {
+            return {
+                plane: _plane,
+                globalX: _i << 6 | _x,
+                globalY: _j << 6 | _y
+            };
         }
     });
 
@@ -135,31 +288,140 @@ void function (global) {
             link.href = '#';
             link.title = 'Select Chunks';
             link.innerHTML = 'Chunk';
+
+            this.isActive = false;
+            this.chunks = {};  // Store chunks as {chunk: Set(planes)}
+
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
-                      .on(link, 'click', function() {
-                          this._toggleTextbox('Chunk selection activated...');
-                      }, this);
+                .on(link, 'click', function() {
+                    this._toggleChunkSelection(map);
+                }, this);
+
             return container;
         },
 
+        _toggleChunkSelection: function(map) {
+            // Toggle active state
+            this.isActive = !this.isActive;
+
+            // Show or hide the text box and map click listener
+            if (this.isActive) {
+                this.chunks = {}; // Reset chunks for a new selection
+                this._toggleTextbox('Click to select chunks...');
+                map.on('click', this._handleMapClick, this);  // Start listening for map clicks
+            } else {
+                this._textbox.style.display = 'none';  // Hide the text box when toggled off
+                map.off('click', this._handleMapClick, this);  // Stop listening for map clicks
+            }
+        },
+
         _toggleTextbox: function(text) {
+            // Create the text box if it doesn't exist
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
-                L.DomEvent.on(this._textbox, 'click', function() {
-                    navigator.clipboard.writeText(this.textContent);
-                    alert('Text copied to clipboard!');
-                });
+                this._textbox.style.right = '80px';
+                this._textbox.style.height = '250px';  // Ensure consistent height
+
+                // Copy-to-clipboard functionality
+                L.DomEvent.on(this._textbox, 'click', function(e) {
+                    L.DomEvent.stop(e);  // Prevent map click event
+
+                    // Execute copy-to-clipboard
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(this._textbox.textContent).then(() => {
+                            showNotification('Text copied to clipboard!');
+                        }).catch(err => {
+                            showNotification('Failed to copy data: ' + err);
+                        });
+                    } else {
+                        // Fallback for older browsers
+                        const textarea = document.createElement('textarea');
+                        textarea.value = this._textbox.textContent;
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            showNotification('Text copied to clipboard!');
+                        } catch (err) {
+                            showNotification('Failed to copy data: ' + err);
+                        }
+                        document.body.removeChild(textarea);
+                    }
+                }, this);  // Pass correct context to this function
             } else {
-                if (this._textbox.style.display === 'none') {
-                    this._textbox.style.display = 'block';
-                    this._textbox.textContent = text;
-                    this._textbox.style.right = '80px'; // Adjusted right positioning
-                    this._textbox.style.height = '250px'; // Ensure consistent height
-                } else {
-                    this._textbox.style.display = 'none';
-                }
+                this._textbox.style.display = 'block';  // Show the text box if hidden
+                this._textbox.textContent = text;
             }
+        },
+
+        _handleMapClick: function(e) {
+            let chunkCoords = this._getChunkCoords(e.latlng.lat, e.latlng.lng);
+            if (chunkCoords) {
+                let { chunkString, plane } = chunkCoords;
+
+                // Add chunk if it doesn't exist
+                if (!this.chunks[chunkString]) {
+                    this.chunks[chunkString] = new Set();
+                }
+
+                // Add plane to the chunk
+                this.chunks[chunkString].add(plane);
+
+                // Update the textbox with the current chunk data
+                this._updateTextbox();
+            }
+        },
+
+        _getChunkCoords: function(lat, lng) {
+            let globalX = parseInt(lng);
+            let globalY = parseInt(lat);
+            let plane = this._map.getPlane();  // Assuming a method that returns the current plane
+
+            // Convert the coordinates to chunk coordinates
+            let converted = this.convert(plane, globalX, globalY);
+            let chunkString = `${converted.i}-${converted.j}`;  // Format chunk as "40-49" etc.
+
+            return { chunkString, plane };
+        },
+
+        _updateTextbox: function() {
+            let chunkData = 'new MapChunk(new String[]{\n';  // Initialize chunk data
+
+            // Collect all unique chunks and planes
+            let chunkStrings = [];
+            let planesSet = new Set();
+
+            for (let chunk in this.chunks) {
+                chunkStrings.push(`    "${chunk}"`);
+                this.chunks[chunk].forEach(plane => planesSet.add(plane));
+            }
+
+            // Format chunk data with indentation
+            chunkData += chunkStrings.join(',\n') + '\n}, "';
+            chunkData += Array.from(planesSet).sort().join('", "') + '");\n';
+
+            // Update the text box with the formatted chunk data
+            this._textbox.innerHTML = `<pre>${chunkData}</pre>`;
+        },
+
+        // Coordinate conversion functions (same as used in position.js)
+        convert: function(_plane, _globalX, _globalY) {
+            return {
+                plane: _plane,
+                i: _globalX >> 6,
+                j: _globalY >> 6,
+                x: _globalX & 0x3F,
+                y: _globalY & 0x3F,
+            };
+        },
+
+        deConvert: function(_plane, _i, _j, _x, _y) {
+            return {
+                plane: _plane,
+                globalX: _i << 6 | _x,
+                globalY: _j << 6 | _y
+            };
         }
     });
 
