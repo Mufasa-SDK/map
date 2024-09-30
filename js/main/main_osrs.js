@@ -246,7 +246,7 @@ void function (global) {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
-                this._textbox.style.right = '80px';
+                this._textbox.style.right = '85px';
                 this._textbox.style.height = '250px';  // Ensure consistent height
 
                 // Add copy-to-clipboard functionality
@@ -404,7 +404,7 @@ void function (global) {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
-                this._textbox.style.right = '80px';
+                this._textbox.style.right = '85px';
                 this._textbox.style.height = '250px';  // Ensure consistent height
 
                 // Copy-to-clipboard functionality
@@ -535,11 +535,187 @@ void function (global) {
         }
     });
 
+    L.Control.ChunkBoxSelector = L.Control.extend({
+        onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            var link = L.DomUtil.create('a', '', container);
+            link.href = '#';
+            link.title = 'Select Chunk Box';
+            link.innerHTML = 'ChunkB';
+            link.style.width = '60px';
+            link.style.textAlign = 'center';
+
+            this.isActive = false;
+            this.selectedChunks = [];  // Store two selected chunks
+            this.chunkLayers = [];  // Store chunk rectangles for clearing
+
+            L.DomEvent.on(link, 'click', L.DomEvent.stop)
+                .on(link, 'click', function() {
+                    this._toggleChunkSelection(map);
+                }, this);
+
+            return container;
+        },
+
+        _toggleChunkSelection: function(map) {
+            this.isActive = !this.isActive;
+
+            if (this.isActive) {
+                this.selectedChunks = [];  // Reset for new selection
+                this.chunkLayers = [];  // Clear chunk layer array
+                this._toggleTextbox('Click the top-left and bottom-right chunks...');
+                map.on('click', this._handleMapClick, this);  // Start listening for map clicks
+            } else {
+                this._textbox.style.display = 'none';
+                map.off('click', this._handleMapClick, this);  // Stop listening for map clicks
+                this._clearChunkLayers();  // Clear the drawn chunks
+            }
+        },
+
+        _toggleTextbox: function(text) {
+            if (!this._textbox) {
+                this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
+                this._textbox.textContent = text;
+                this._textbox.style.right = '85px';
+                this._textbox.style.height = '250px';
+
+                // Copy-to-clipboard functionality
+                L.DomEvent.on(this._textbox, 'click', function(e) {
+                    L.DomEvent.stop(e);
+
+                    if (navigator.clipboard) {
+                        navigator.clipboard.writeText(this._textbox.textContent).then(() => {
+                            showNotification('Text copied to clipboard!');
+                        }).catch(err => {
+                            showNotification('Failed to copy data: ' + err);
+                        });
+                    } else {
+                        const textarea = document.createElement('textarea');
+                        textarea.value = this._textbox.textContent;
+                        document.body.appendChild(textarea);
+                        textarea.select();
+                        try {
+                            document.execCommand('copy');
+                            showNotification('Text copied to clipboard!');
+                        } catch (err) {
+                            showNotification('Failed to copy data: ' + err);
+                        }
+                        document.body.removeChild(textarea);
+                    }
+                }, this);
+            } else {
+                this._textbox.style.display = 'block';
+                this._textbox.textContent = text;
+            }
+        },
+
+        _handleMapClick: function(e) {
+            let chunkCoords = this._getChunkCoords(e.latlng.lat, e.latlng.lng);
+            if (chunkCoords) {
+                this.selectedChunks.push(chunkCoords);
+                if (this.selectedChunks.length === 2) {
+                    this._drawChunkBox();  // Highlight the box of chunks
+                    this._updateTextbox();  // Update textbox with the selected box
+                    map.off('click', this._handleMapClick, this);  // Stop further selection
+                }
+            }
+        },
+
+        _drawChunkBox: function() {
+            let firstChunk = this.selectedChunks[0];
+            let secondChunk = this.selectedChunks[1];
+
+            let [i1, j1] = firstChunk.chunkString.split('-').map(Number);
+            let [i2, j2] = secondChunk.chunkString.split('-').map(Number);
+
+            // Calculate the min and max for the box
+            let iMin = Math.min(i1, i2);
+            let iMax = Math.max(i1, i2);
+            let jMin = Math.min(j1, j2);
+            let jMax = Math.max(j1, j2);
+
+            // Draw all chunks within the selected box
+            for (let i = iMin; i <= iMax; i++) {
+                for (let j = jMin; j <= jMax; j++) {
+                    this._drawSingleChunk(i, j);
+                }
+            }
+        },
+
+        _drawSingleChunk: function(i, j) {
+            let southWest = L.latLng(j << 6, i << 6);  // Bottom-left of the chunk
+            let northEast = L.latLng((j + 1) << 6, (i + 1) << 6);  // Top-right of the chunk
+            let bounds = [southWest, northEast];
+
+            let rect = L.rectangle(bounds, { color: "blue", weight: 2 });
+            rect.addTo(this._map);
+            this.chunkLayers.push(rect);  // Store the rectangle for clearing later
+        },
+
+        _clearChunkLayers: function() {
+            this.chunkLayers.forEach(layer => this._map.removeLayer(layer));
+            this.chunkLayers = [];
+        },
+
+        _getChunkCoords: function(lat, lng) {
+            let globalX = parseInt(lng);
+            let globalY = parseInt(lat);
+            let plane = this._map.getPlane();
+
+            let converted = this.convert(plane, globalX, globalY);
+            let chunkString = `${converted.i}-${converted.j}`;
+
+            return { chunkString, plane };
+        },
+
+        _updateTextbox: function() {
+            if (this.selectedChunks.length === 2) {
+                let firstChunk = this.selectedChunks[0];
+                let secondChunk = this.selectedChunks[1];
+
+                let [i1, j1] = firstChunk.chunkString.split('-').map(Number);
+                let [i2, j2] = secondChunk.chunkString.split('-').map(Number);
+
+                // Initialize chunk data for the two selected chunks
+                let chunkData = 'new MapChunk(new String[]{\n';  // Initialize chunk data
+                let chunkStrings = [];
+
+                // Add the first and second chunks to the string
+                chunkStrings.push(`    "${i1}-${j1}"`);
+                chunkStrings.push(`    "${i2}-${j2}"`);
+
+                // Format chunk data with indentation (Mufasa way)
+                chunkData += chunkStrings.join(',\n') + '\n}, "0");\n';  // Assuming "0" as the plane
+
+                // Update the text box with the formatted chunk data
+                this._textbox.innerHTML = `<pre>${chunkData}</pre>`;
+            }
+        },
+
+        convert: function(_plane, _globalX, _globalY) {
+            return {
+                plane: _plane,
+                i: _globalX >> 6,
+                j: _globalY >> 6,
+                x: _globalX & 0x3F,
+                y: _globalY & 0x3F,
+            };
+        },
+
+        deConvert: function(_plane, _i, _j, _x, _y) {
+            return {
+                plane: _plane,
+                globalX: _i << 6 | _x,
+                globalY: _j << 6 | _y
+            };
+        }
+    });
 
     // Add controls to the map in the desired order
     runescape_map.addControl(new L.Control.AreaGeneration({ position: 'topright' }));
     runescape_map.addControl(new L.Control.PathGeneration({ position: 'topright' }));
     runescape_map.addControl(new L.Control.ChunkSelector({ position: 'topright' }));
+    runescape_map.addControl(new L.Control.ChunkBoxSelector({ position: 'topright' }));
 
     L.control.display.OSRSvarbits({
         show3d: true,
