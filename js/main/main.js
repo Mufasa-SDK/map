@@ -1,4 +1,4 @@
-"use strict";
+use strict";
 
 import "../../js/leaflet.js";
 import "../../js/layers.js";
