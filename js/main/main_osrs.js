@@ -69,7 +69,7 @@ void function (global) {
     });
 
     L.Control.AreaGeneration = L.Control.extend({
-        onAdd: function(map) {
+        onAdd: function (map) {
             this._map = map;
             var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
             var link = L.DomUtil.create('a', '', container);
@@ -80,21 +80,24 @@ void function (global) {
             link.style.textAlign = 'center';
 
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
-                      .on(link, 'click', this._toggleTextbox, this);
+                .on(link, 'click', this._toggleTextbox, this);
+
             this.clickCount = 0;
             this.firstCoord = null;
             this.secondCoord = null;
             this.areaLayer = null;
+
             map.on('click', this._mapClick, this);
             return container;
         },
 
-        _toggleTextbox: function() {
+        _toggleTextbox: function () {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = 'Click map to select area...';
                 this._textbox.style.display = 'block';
-                L.DomEvent.on(this._textbox, 'click', function(e) {
+
+                L.DomEvent.on(this._textbox, 'click', function (e) {
                     navigator.clipboard.writeText(this.textContent).then(() => {
                         showNotification('Text copied to clipboard!');
                     }).catch(err => {
@@ -112,31 +115,30 @@ void function (global) {
             }
         },
 
-        _mapClick: function(e) {
+        _mapClick: function (e) {
             if (this._textbox && this._textbox.style.display !== 'none') {
+                let latLng = e.latlng;
                 let coords = this._convertMapCoords(e.latlng.lat, e.latlng.lng);
+
                 if (this.clickCount === 0) {
-                    this.firstCoord = coords;
+                    // Store the first coordinate and update the textbox
+                    this.firstCoord = latLng;
+                    this.firstCoordM = coords;
                     this._textbox.textContent = 'First corner selected...';
                     this.clickCount++;
                 } else if (this.clickCount === 1) {
-                    this.secondCoord = coords;
+                    // Store the second coordinate
+                    this.secondCoord = latLng;
+                    this.secondCoordM = coords;
+
+                    // Draw the full area using the first and second click coordinates
                     this._drawArea();
-                    this._textbox.innerHTML = `<pre>new Area(\n\tnew Tile(${this.firstCoord}), \n\tnew Tile(${this.secondCoord})\n);</pre>`;
-                    this.clickCount = 0; // Reset for new area selection
+
+                    // Update the textbox with the area data
+                    this._textbox.innerHTML = `<pre>new Area(\n\tnew Tile(${this.firstCoordM}), \n\tnew Tile(${this.secondCoordM})\n);</pre>`;
+                    this.clickCount = 0; // Reset for the next area selection
                 }
             }
-        },
-
-        _drawArea: function() {
-            if (this.areaLayer) {
-                this._map.removeLayer(this.areaLayer);
-            }
-            let firstLatLng = this._map.containerPointToLatLng(this._getPointFromCoord(this.firstCoord));
-            let secondLatLng = this._map.containerPointToLatLng(this._getPointFromCoord(this.secondCoord));
-            this.areaLayer = L.rectangle([firstLatLng, secondLatLng], {color: "#ff7800", weight: 1});
-            this.areaLayer.addTo(this._map);
-            this.areaLayer.bringToFront(); // Ensure the rectangle is on top of other layers
         },
 
         _convertMapCoords: function(lat, lng) {
@@ -153,6 +155,35 @@ void function (global) {
         _getPointFromCoord: function(coord) {
             let parts = coord.split(", ");
             return new L.Point(parseInt(parts[0]), parseInt(parts[1]));
+        },
+
+        // Draw the rectangle based on the first and second coordinates
+        _drawArea: function () {
+            if (this.areaLayer) {
+                this._map.removeLayer(this.areaLayer);
+            }
+
+            // Create the bounds based on the two corner coordinates
+            let bounds = [this.firstCoord, this.secondCoord];
+
+            // Draw the rectangle
+            this.areaLayer = L.rectangle(bounds, { color: "blue", weight: 3 });
+            this.areaLayer.addTo(this._map);
+            this.areaLayer.bringToFront(); // Ensure the rectangle is on top of other layers
+        },
+
+        // Draw a small 10x10 blue rectangle at the first clicked location
+        _drawSmallRectangle: function (latLng) {
+            let smallRectBounds = [
+                [latLng.lat - 0.0001, latLng.lng - 0.0001],
+                [latLng.lat + 0.0001, latLng.lng + 0.0001]
+            ];
+            if (this.firstRectLayer) {
+                this._map.removeLayer(this.firstRectLayer);
+            }
+            this.firstRectLayer = L.rectangle(smallRectBounds, { color: "blue", weight: 2 });
+            this.firstRectLayer.addTo(this._map);
+            this.firstRectLayer.bringToFront();
         },
 
         convert: function (_plane, _globalX, _globalY) {
@@ -175,7 +206,7 @@ void function (global) {
     });
 
     L.Control.PathGeneration = L.Control.extend({
-        onAdd: function(map) {
+        onAdd: function (map) {
             var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
             var link = L.DomUtil.create('a', '', container);
             link.href = '#';
@@ -187,16 +218,17 @@ void function (global) {
             // Track if path generation is active
             this.isActive = false;
             this.pathPoints = [];  // Stores clicked path points
+            this.pathLayers = [];  // Stores drawn rectangles and lines
 
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
-                .on(link, 'click', function() {
+                .on(link, 'click', function () {
                     this._togglePathGeneration(map);  // Toggle path generation mode
                 }, this);
 
             return container;
         },
 
-        _togglePathGeneration: function(map) {
+        _togglePathGeneration: function (map) {
             this.isActive = !this.isActive;  // Toggle active state
 
             if (this.isActive) {
@@ -206,10 +238,11 @@ void function (global) {
             } else {
                 this._textbox.style.display = 'none';  // Hide text box when deactivated
                 map.off('click', this._handleMapClick, this);  // Stop listening for clicks
+                this._clearPathLayers();  // Clear existing layers
             }
         },
 
-        _toggleTextbox: function(text) {
+        _toggleTextbox: function (text) {
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
@@ -217,7 +250,7 @@ void function (global) {
                 this._textbox.style.height = '250px';  // Ensure consistent height
 
                 // Add copy-to-clipboard functionality
-                L.DomEvent.on(this._textbox, 'click', function(e) {
+                L.DomEvent.on(this._textbox, 'click', function (e) {
                     L.DomEvent.stop(e);  // Prevent triggering map clicks when clicking on the textbox
 
                     navigator.clipboard.writeText(this._textbox.textContent).then(() => {
@@ -232,20 +265,61 @@ void function (global) {
             }
         },
 
-        _handleMapClick: function(e) {
-            let coords = this._convertMapCoords(e.latlng.lat, e.latlng.lng);
-            this.pathPoints.push(coords);  // Add point to path
+        _handleMapClick: function (e) {
+            let latLng = e.latlng;
+            let coords = this._convertMapCoords(latLng.lat, latLng.lng);
+            this.pathPoints.push({ latLng, coords });  // Add point to path
+
+            if (this.pathPoints.length > 1) {
+                // Draw the path line first
+                this._drawPathLine(this.pathPoints[this.pathPoints.length - 2].latLng, latLng);
+            }
+
+            // Redraw all red dots to ensure they stay on top
+            this._redrawAllDots();
 
             // Update the path in the text box
             this._updateTextbox();
         },
 
+        // Draws a yellow line connecting two clicked points
+        _drawPathLine: function (latLng1, latLng2) {
+            let line = L.polyline([latLng1, latLng2], { color: "red", weight: 3 });
+            line.addTo(this._map);
+            this.pathLayers.push(line);  // Store the line to remove later if needed
+        },
+
+        // Redraws all path points (red dots) to ensure they stay on top of the lines
+        _redrawAllDots: function () {
+            // Redraw all red dots from the pathPoints array
+            this.pathPoints.forEach(point => {
+                this._drawPathPoint(point.latLng);
+            });
+        },
+
+        // Draws a 10x10 blue rectangle at the clicked point
+        _drawPathPoint: function (latLng) {
+            let rectBounds = [
+                [latLng.lat - 0.005, latLng.lng - 0.005],  // Increased bounds for better visibility
+                [latLng.lat + 0.005, latLng.lng + 0.005]
+            ];
+            let rect = L.rectangle(rectBounds, { color: "blue", weight: 7 });
+            rect.addTo(this._map);
+            this.pathLayers.push(rect);  // Store the rectangle to remove later if needed
+        },
+
+        // Clears all drawn layers (rectangles and lines)
+        _clearPathLayers: function () {
+            this.pathLayers.forEach(layer => this._map.removeLayer(layer));
+            this.pathLayers = [];
+        },
+
         // Updates the textbox with the current path data
-        _updateTextbox: function() {
+        _updateTextbox: function () {
             if (this.pathPoints.length > 0) {
                 let pathText = 'Tile[] path = new Tile[] {\n';
-                this.pathPoints.forEach((coord, index) => {
-                    pathText += `\tnew Tile(${coord})`;
+                this.pathPoints.forEach((point, index) => {
+                    pathText += `\tnew Tile(${point.coords})`;
                     if (index < this.pathPoints.length - 1) {
                         pathText += ',\n';  // Add a comma between coordinates, except the last one
                     }
@@ -255,8 +329,8 @@ void function (global) {
             }
         },
 
-        // Formats the coordinates as Mufasa-style Tile, same as area generator
-        _convertMapCoords: function(lat, lng) {
+        // Converts map coordinates to Mufasa-style coordinates
+        _convertMapCoords: function (lat, lng) {
             let globalX = parseInt(lng);
             let globalY = parseInt(lat);
             let plane = this._map.getPlane();  // Get the current plane
@@ -271,7 +345,7 @@ void function (global) {
             return {
                 plane: _plane,
                 i: _globalX >> 6,
-                j: _globalY >> 6,
+                j: _globalX >> 6,
                 x: _globalX & 0x3F,
                 y: _globalY & 0x3F,
             };
