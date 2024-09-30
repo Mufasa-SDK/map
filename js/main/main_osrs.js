@@ -2,7 +2,6 @@
 
 import "../../js/leaflet.js";
 import "../../js/layers.js";
-import "../../js/plugins/leaflet.fullscreen.js";
 import "../../js/plugins/leaflet.mapSelector.js";
 import "../../js/plugins/leaflet.zoom.js";
 import "../../js/plugins/leaflet.plane.js";
@@ -20,7 +19,6 @@ void function (global) {
         maxBoundsViscosity: 0.5,
 
         customZoomControl: true,
-        fullscreenControl: true,
         planeControl: true,
         positionControl: true,
         messageBox: true,
