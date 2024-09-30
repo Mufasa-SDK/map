@@ -13,6 +13,28 @@ import "../../js/plugins/leaflet.clickcopy.js";
 import "../../js/plugins/leaflet.maplabels.js";
 
 void function (global) {
+    // Function to show notification
+    function showNotification(text) {
+        var notification = document.querySelector('.notification');
+        if (!notification) {
+            notification = L.DomUtil.create('div', 'notification', document.body);
+            notification.style.position = 'fixed';
+            notification.style.bottom = '20px';
+            notification.style.right = '20px';
+            notification.style.background = 'rgba(0, 0, 0, 0.7)';
+            notification.style.color = 'white';
+            notification.style.padding = '10px';
+            notification.style.borderRadius = '5px';
+            notification.style.zIndex = '2000';
+        }
+        notification.textContent = text;
+        notification.style.display = 'block';
+
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000); // Auto-hide after 3000ms
+    }
+
     let runescape_map = global.runescape_map = L.gameMap('map', {
 
         maxBounds: [[-1000, -1000], [12800 + 1000, 12800 + 1000]],
@@ -35,6 +57,116 @@ void function (global) {
         showMapBorder: true,
         enableUrlLocation: true
     });
+
+    L.Control.AreaGeneration = L.Control.extend({
+        onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            var link = L.DomUtil.create('a', '', container);
+            link.href = '#';
+            link.title = 'Generate Area';
+            link.innerHTML = 'Area';
+            L.DomEvent.on(link, 'click', L.DomEvent.stop)
+                      .on(link, 'click', function() {
+                          this._toggleTextbox('Area generation data...');
+                      }, this);
+            return container;
+        },
+
+        _toggleTextbox: function(text) {
+            if (!this._textbox) {
+                this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
+                this._textbox.textContent = text;
+                L.DomEvent.on(this._textbox, 'click', function() {
+                    navigator.clipboard.writeText(this.textContent);
+                    alert('Text copied to clipboard!');
+                });
+            } else {
+                if (this._textbox.style.display === 'none') {
+                    this._textbox.style.display = 'block';
+                    this._textbox.textContent = text;
+                    this._textbox.style.right = '80px'; // Adjusted right positioning
+                    this._textbox.style.height = '250px'; // Ensure consistent height
+                } else {
+                    this._textbox.style.display = 'none';
+                }
+            }
+        }
+    });
+
+    L.Control.PathGeneration = L.Control.extend({
+        onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            var link = L.DomUtil.create('a', '', container);
+            link.href = '#';
+            link.title = 'Generate Path';
+            link.innerHTML = 'Path';
+            L.DomEvent.on(link, 'click', L.DomEvent.stop)
+                      .on(link, 'click', function() {
+                          this._toggleTextbox('Path generation data...');
+                      }, this);
+            return container;
+        },
+
+        _toggleTextbox: function(text) {
+            if (!this._textbox) {
+                this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
+                this._textbox.textContent = text;
+                L.DomEvent.on(this._textbox, 'click', function() {
+                    navigator.clipboard.writeText(this.textContent);
+                    alert('Text copied to clipboard!');
+                });
+            } else {
+                if (this._textbox.style.display === 'none') {
+                    this._textbox.style.display = 'block';
+                    this._textbox.textContent = text;
+                    this._textbox.style.right = '80px'; // Adjusted right positioning
+                    this._textbox.style.height = '250px'; // Ensure consistent height
+                } else {
+                    this._textbox.style.display = 'none';
+                }
+            }
+        }
+    });
+
+    L.Control.ChunkSelector = L.Control.extend({
+        onAdd: function(map) {
+            var container = L.DomUtil.create('div', 'leaflet-bar leaflet-control');
+            var link = L.DomUtil.create('a', '', container);
+            link.href = '#';
+            link.title = 'Select Chunks';
+            link.innerHTML = 'Chunk';
+            L.DomEvent.on(link, 'click', L.DomEvent.stop)
+                      .on(link, 'click', function() {
+                          this._toggleTextbox('Chunk selection activated...');
+                      }, this);
+            return container;
+        },
+
+        _toggleTextbox: function(text) {
+            if (!this._textbox) {
+                this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
+                this._textbox.textContent = text;
+                L.DomEvent.on(this._textbox, 'click', function() {
+                    navigator.clipboard.writeText(this.textContent);
+                    alert('Text copied to clipboard!');
+                });
+            } else {
+                if (this._textbox.style.display === 'none') {
+                    this._textbox.style.display = 'block';
+                    this._textbox.textContent = text;
+                    this._textbox.style.right = '80px'; // Adjusted right positioning
+                    this._textbox.style.height = '250px'; // Ensure consistent height
+                } else {
+                    this._textbox.style.display = 'none';
+                }
+            }
+        }
+    });
+
+    // Add controls to the map in the desired order
+    runescape_map.addControl(new L.Control.AreaGeneration({ position: 'topright' }));
+    runescape_map.addControl(new L.Control.PathGeneration({ position: 'topright' }));
+    runescape_map.addControl(new L.Control.ChunkSelector({ position: 'topright' }));
 
     L.control.display.OSRSvarbits({
         show3d: true,
