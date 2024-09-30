@@ -372,7 +372,7 @@ void function (global) {
 
             this.isActive = false;
             this.chunks = {};  // Store chunks as {chunk: Set(planes)}
-            this.chunkLayers = [];  // Store chunk rectangles for clearing
+            this.chunkLayers = {};  // Store chunk rectangles keyed by chunkString
 
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
                 .on(link, 'click', function() {
@@ -383,13 +383,11 @@ void function (global) {
         },
 
         _toggleChunkSelection: function(map) {
-            // Toggle active state
             this.isActive = !this.isActive;
 
-            // Show or hide the text box and map click listener
             if (this.isActive) {
                 this.chunks = {};  // Reset chunks for a new selection
-                this.chunkLayers = [];  // Clear the chunk layer array
+                this.chunkLayers = {};  // Clear the chunk layer array
                 this._toggleTextbox('Click to select chunks...');
                 map.on('click', this._handleMapClick, this);  // Start listening for map clicks
             } else {
@@ -400,18 +398,15 @@ void function (global) {
         },
 
         _toggleTextbox: function(text) {
-            // Create the text box if it doesn't exist
             if (!this._textbox) {
                 this._textbox = L.DomUtil.create('div', 'textbox-container', this._map._container);
                 this._textbox.textContent = text;
                 this._textbox.style.right = '85px';
-                this._textbox.style.height = '250px';  // Ensure consistent height
+                this._textbox.style.height = '250px';
 
-                // Copy-to-clipboard functionality
                 L.DomEvent.on(this._textbox, 'click', function(e) {
-                    L.DomEvent.stop(e);  // Prevent map click event
+                    L.DomEvent.stop(e);
 
-                    // Execute copy-to-clipboard
                     if (navigator.clipboard) {
                         navigator.clipboard.writeText(this._textbox.textContent).then(() => {
                             showNotification('Text copied to clipboard!');
@@ -419,7 +414,6 @@ void function (global) {
                             showNotification('Failed to copy data: ' + err);
                         });
                     } else {
-                        // Fallback for older browsers
                         const textarea = document.createElement('textarea');
                         textarea.value = this._textbox.textContent;
                         document.body.appendChild(textarea);
@@ -432,9 +426,9 @@ void function (global) {
                         }
                         document.body.removeChild(textarea);
                     }
-                }, this);  // Pass correct context to this function
+                }, this);
             } else {
-                this._textbox.style.display = 'block';  // Show the text box if hidden
+                this._textbox.style.display = 'block';
                 this._textbox.textContent = text;
             }
         },
@@ -444,16 +438,18 @@ void function (global) {
             if (chunkCoords) {
                 let { chunkString, plane } = chunkCoords;
 
-                // Add chunk if it doesn't exist
-                if (!this.chunks[chunkString]) {
+                // If the chunk is already selected, unselect it
+                if (this.chunks[chunkString]) {
+                    delete this.chunks[chunkString];  // Remove from chunks
+                    this._removeChunkLayer(chunkString);  // Remove its highlight
+                } else {
+                    // Add chunk if it doesn't exist
                     this.chunks[chunkString] = new Set();
+                    this.chunks[chunkString].add(plane);
+
+                    // Draw the chunk on the map
+                    this._drawChunk(chunkCoords);
                 }
-
-                // Add plane to the chunk
-                this.chunks[chunkString].add(plane);
-
-                // Draw the chunk on the map
-                this._drawChunk(chunkCoords);
 
                 // Update the textbox with the current chunk data
                 this._updateTextbox();
@@ -463,42 +459,43 @@ void function (global) {
         _drawChunk: function(chunkCoords) {
             let { chunkString } = chunkCoords;
 
-            // Split the chunk coordinates (i-j)
             let [i, j] = chunkString.split('-').map(Number);
-
-            // Convert the chunk coordinates back to global coordinates
             let southWest = L.latLng(j << 6, i << 6);  // Bottom-left of the chunk
             let northEast = L.latLng((j + 1) << 6, (i + 1) << 6);  // Top-right of the chunk
             let bounds = [southWest, northEast];
 
-            // Create and add a blue rectangle for the chunk
             let rect = L.rectangle(bounds, { color: "blue", weight: 2 });
             rect.addTo(this._map);
-            this.chunkLayers.push(rect);  // Store the rectangle for clearing later
+            this.chunkLayers[chunkString] = rect;  // Store the rectangle for later removal
+        },
+
+        _removeChunkLayer: function(chunkString) {
+            if (this.chunkLayers[chunkString]) {
+                this._map.removeLayer(this.chunkLayers[chunkString]);  // Remove the layer from the map
+                delete this.chunkLayers[chunkString];  // Remove it from the chunkLayers object
+            }
         },
 
         _clearChunkLayers: function() {
-            // Remove all drawn chunk rectangles
-            this.chunkLayers.forEach(layer => this._map.removeLayer(layer));
-            this.chunkLayers = [];
+            for (let chunk in this.chunkLayers) {
+                this._map.removeLayer(this.chunkLayers[chunk]);
+            }
+            this.chunkLayers = {};
         },
 
         _getChunkCoords: function(lat, lng) {
             let globalX = parseInt(lng);
             let globalY = parseInt(lat);
-            let plane = this._map.getPlane();  // Assuming a method that returns the current plane
+            let plane = this._map.getPlane();
 
-            // Convert the coordinates to chunk coordinates
             let converted = this.convert(plane, globalX, globalY);
-            let chunkString = `${converted.i}-${converted.j}`;  // Format chunk as "40-49" etc.
+            let chunkString = `${converted.i}-${converted.j}`;
 
             return { chunkString, plane };
         },
 
         _updateTextbox: function() {
-            let chunkData = 'new MapChunk(new String[]{\n';  // Initialize chunk data
-
-            // Collect all unique chunks and planes
+            let chunkData = 'new MapChunk(new String[]{\n';
             let chunkStrings = [];
             let planesSet = new Set();
 
@@ -507,15 +504,12 @@ void function (global) {
                 this.chunks[chunk].forEach(plane => planesSet.add(plane));
             }
 
-            // Format chunk data with indentation
             chunkData += chunkStrings.join(',\n') + '\n}, "';
             chunkData += Array.from(planesSet).sort().join('", "') + '");\n';
 
-            // Update the text box with the formatted chunk data
             this._textbox.innerHTML = `<pre>${chunkData}</pre>`;
         },
 
-        // Coordinate conversion functions (same as used in position.js)
         convert: function(_plane, _globalX, _globalY) {
             return {
                 plane: _plane,
