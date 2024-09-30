@@ -18,7 +18,7 @@ import "../leaflet.js";
         options: {
             position: 'topleft',
             separator: '_',
-            emptyString: 'Unavailable',
+            emptyString: 'Invalid Coordinates',
             prefix: "",
             flyDuration: 3, //seconds
         },
@@ -38,7 +38,7 @@ import "../leaflet.js";
             });
 
             // gross hack because the Path renderer doesn't work properly if this is added right now
-			// we delay this for after this event loop finishes
+            // we delay this for after this event loop finishes
             setTimeout(() => {
                 this._rect.addTo(map);
             }, 0)
@@ -191,12 +191,28 @@ import "../leaflet.js";
             let position = this._map.containerPointToLatLng(this._containerPointCache);
             this.globalX = parseInt(position.lng);
             this.globalY = parseInt(position.lat);
-            let jCoord = this.createString(this.convert(this._map._plane, this.globalX, this.globalY));
+            let coord = this.convert(this._map._plane, this.globalX, this.globalY);
             let pxyCoord = this.createString(this._map._plane, this.globalX, this.globalY);
-            this._container.innerHTML = jCoord + "<br>" + pxyCoord;
-            this._rect.setBounds([[this.globalY, this.globalX], [this.globalY + 1, this.globalX + 1]])
 
-        }
+            let parts = pxyCoord.split(this.options.separator);
+            let modifiedX = parseInt(parts[1]) * 4;
+            let modifiedY = parseInt(parts[2]) * 4 - 254;
+            this._mufasaCoordinates = `${modifiedX}, ${modifiedY}, ${parts[0]}`;
+
+            let displayString = `
+                <strong>Mejrs data:</strong><br>
+                ${this.createString(coord)}<br>
+                ${pxyCoord}<br>
+                <br>
+                <strong>Mufasa data:</strong><br>
+                Plane: ${parts[0]}<br>
+                Chunk: ${coord.i}-${coord.j}<br>
+                ${this._mufasaCoordinates}
+            `;
+
+            this._container.innerHTML = displayString;
+            this._rect.setBounds([[this.globalY, this.globalX], [this.globalY + 1, this.globalX + 1]]);
+        },
 
     });
 
