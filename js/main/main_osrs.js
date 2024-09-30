@@ -76,6 +76,9 @@ void function (global) {
             link.href = '#';
             link.title = 'Generate Area';
             link.innerHTML = 'Area';
+            link.style.width = '40px';
+            link.style.textAlign = 'center';
+
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
                       .on(link, 'click', this._toggleTextbox, this);
             this.clickCount = 0;
@@ -178,6 +181,8 @@ void function (global) {
             link.href = '#';
             link.title = 'Generate Path';
             link.innerHTML = 'Path';
+            link.style.width = '40px';
+            link.style.textAlign = 'center';
 
             // Track if path generation is active
             this.isActive = false;
@@ -288,6 +293,8 @@ void function (global) {
             link.href = '#';
             link.title = 'Select Chunks';
             link.innerHTML = 'Chunk';
+            link.style.width = '40px';
+            link.style.textAlign = 'center';
 
             this.isActive = false;
             this.chunks = {};  // Store chunks as {chunk: Set(planes)}
