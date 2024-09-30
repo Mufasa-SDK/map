@@ -141,3 +141,11 @@ img.huechange { filter: hue-rotate(120deg); }
 .leaflet-center.leaflet-middle {
   transform: translate(-50%, -50%);
 }
+
+.world-coordinates {
+    padding: 5px;
+    background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent black */
+    color: white;
+    font-size: 0.8em;
+    border-top: 1px solid #fff; /* Adds a subtle top border for separation */
+}

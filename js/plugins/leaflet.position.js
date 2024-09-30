@@ -32,13 +32,14 @@ import "../leaflet.js";
         onAdd: function (map) {
             this._map = map;
             this._container = L.DomUtil.create('div', 'leaflet-control-mouseposition');
+            this._worldCoordContainer = L.DomUtil.create('div', 'world-coordinates'); // Create a new div for world coordinates
+            this._container.appendChild(this._worldCoordContainer); // Append it to the main container
+
             this._rect = L.rectangle([[0, 0], [1, 1]], {
                 color: "#ff7800",
                 weight: 1,
             });
 
-            // gross hack because the Path renderer doesn't work properly if this is added right now
-			// we delay this for after this event loop finishes
             setTimeout(() => {
                 this._rect.addTo(map);
             }, 0)
@@ -52,6 +53,7 @@ import "../leaflet.js";
             this._map.on('mouseout', this.clear.bind(this));
 
             this._container.innerHTML = this.options.emptyString;
+            this._worldCoordContainer.innerHTML = "World Coords: Unavailable"; // Default text
 
             return this._container;
         },
@@ -191,12 +193,14 @@ import "../leaflet.js";
             let position = this._map.containerPointToLatLng(this._containerPointCache);
             this.globalX = parseInt(position.lng);
             this.globalY = parseInt(position.lat);
-            let jCoord = this.createString(this.convert(this._map._plane, this.globalX, this.globalY));
+            let coord = this.convert(this._map._plane, this.globalX, this.globalY);
+            let jCoord = this.createString(coord);
             let pxyCoord = this.createString(this._map._plane, this.globalX, this.globalY);
             this._container.innerHTML = jCoord + "<br>" + pxyCoord;
-            this._rect.setBounds([[this.globalY, this.globalX], [this.globalY + 1, this.globalX + 1]])
+            this._worldCoordContainer.innerHTML = "World Coords: " + this.globalX + ", " + this.globalY; // Update world coordinates
 
-        }
+            this._rect.setBounds([[this.globalY, this.globalX], [this.globalY + 1, this.globalX + 1]]);
+        },
 
     });
 
