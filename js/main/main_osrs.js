@@ -372,6 +372,7 @@ void function (global) {
 
             this.isActive = false;
             this.chunks = {};  // Store chunks as {chunk: Set(planes)}
+            this.chunkLayers = [];  // Store chunk rectangles for clearing
 
             L.DomEvent.on(link, 'click', L.DomEvent.stop)
                 .on(link, 'click', function() {
@@ -387,12 +388,14 @@ void function (global) {
 
             // Show or hide the text box and map click listener
             if (this.isActive) {
-                this.chunks = {}; // Reset chunks for a new selection
+                this.chunks = {};  // Reset chunks for a new selection
+                this.chunkLayers = [];  // Clear the chunk layer array
                 this._toggleTextbox('Click to select chunks...');
                 map.on('click', this._handleMapClick, this);  // Start listening for map clicks
             } else {
                 this._textbox.style.display = 'none';  // Hide the text box when toggled off
                 map.off('click', this._handleMapClick, this);  // Stop listening for map clicks
+                this._clearChunkLayers();  // Clear the drawn chunks
             }
         },
 
@@ -449,9 +452,35 @@ void function (global) {
                 // Add plane to the chunk
                 this.chunks[chunkString].add(plane);
 
+                // Draw the chunk on the map
+                this._drawChunk(chunkCoords);
+
                 // Update the textbox with the current chunk data
                 this._updateTextbox();
             }
+        },
+
+        _drawChunk: function(chunkCoords) {
+            let { chunkString } = chunkCoords;
+
+            // Split the chunk coordinates (i-j)
+            let [i, j] = chunkString.split('-').map(Number);
+
+            // Convert the chunk coordinates back to global coordinates
+            let southWest = L.latLng(j << 6, i << 6);  // Bottom-left of the chunk
+            let northEast = L.latLng((j + 1) << 6, (i + 1) << 6);  // Top-right of the chunk
+            let bounds = [southWest, northEast];
+
+            // Create and add a blue rectangle for the chunk
+            let rect = L.rectangle(bounds, { color: "blue", weight: 2 });
+            rect.addTo(this._map);
+            this.chunkLayers.push(rect);  // Store the rectangle for clearing later
+        },
+
+        _clearChunkLayers: function() {
+            // Remove all drawn chunk rectangles
+            this.chunkLayers.forEach(layer => this._map.removeLayer(layer));
+            this.chunkLayers = [];
         },
 
         _getChunkCoords: function(lat, lng) {
@@ -505,6 +534,7 @@ void function (global) {
             };
         }
     });
+
 
     // Add controls to the map in the desired order
     runescape_map.addControl(new L.Control.AreaGeneration({ position: 'topright' }));
