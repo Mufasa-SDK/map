@@ -322,15 +322,11 @@ void function (global) {
                     // Extract the current X, Y, and plane values
                     let [x, y, plane] = point.coords.split(', ').map(Number);
 
-                    // Use the `createString` logic to convert the Y-coordinate
-                    let pxyCoord = this.createString(plane, x, y); // Get coordinate string
-                    let parts = pxyCoord.split(this.options.separator); // Split the parts
-
-                    // Parse and adjust the Y-coordinate
-                    let modifiedY = parseInt(parts[2]) * 1 - 254; // Only adjust by -254, no scaling
+                    // Convert the Y-coordinate to Mufasa-style
+                    let mufasaY = y * 4 - 254;
 
                     // Reconstruct the converted coordinate string
-                    let convertedCoords = `${x}, ${modifiedY}, ${plane}`;
+                    let convertedCoords = `${x}, ${mufasaY}, ${plane}`;
 
                     // Add the converted Tile to the path text
                     pathText += `\tnew Tile(${convertedCoords})`;
