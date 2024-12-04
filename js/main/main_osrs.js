@@ -319,9 +319,19 @@ void function (global) {
             if (this.pathPoints.length > 0) {
                 let pathText = 'Tile[] path = new Tile[] {\n';
                 this.pathPoints.forEach((point, index) => {
-                    // Convert the map coordinates to Mufasa-style coordinates
-                    let convertedCoords = this._convertMapCoords(point.lat, point.lng);
+                    // Use the refactored Mufasa-style conversion inline
+                    let globalX = parseInt(point.latLng.lng);
+                    let globalY = parseInt(point.latLng.lat);
+                    let plane = this._map.getPlane();
 
+                    // Perform Mufasa coordinate calculation
+                    let coord = this.convert(plane, globalX, globalY);
+                    let pxyCoord = this.createString(plane, globalX, globalY);
+                    let parts = pxyCoord.split(this.options.separator);
+                    let modifiedX = parseInt(parts[1]) * 4;
+                    let modifiedY = parseInt(parts[2]) * 4 - 254;
+
+                    let convertedCoords = `${modifiedX}, ${modifiedY}, ${plane}`;
                     pathText += `\tnew Tile(${convertedCoords})`;
                     if (index < this.pathPoints.length - 1) {
                         pathText += ',\n'; // Add a comma between coordinates, except the last one
