@@ -319,36 +319,26 @@ void function (global) {
             if (this.pathPoints.length > 0) {
                 let pathText = 'Tile[] path = new Tile[] {\n';
                 this.pathPoints.forEach((point, index) => {
-                    let [lat, lng] = point.coords.split(', ').map(Number);
-                    let convertedCoords = this._convertMapCoords(lat, lng); // Use the updated conversion logic
-                    pathText += `\tnew Tile(${convertedCoords})`;
+                    pathText += `\tnew Tile(${point.coords})`;
                     if (index < this.pathPoints.length - 1) {
-                        pathText += ',\n'; // Add a comma between coordinates, except the last one
+                        pathText += ',\n';  // Add a comma between coordinates, except the last one
                     }
                 });
                 pathText += '\n};';
-
-                // Update the text box with the final path
                 this._textbox.innerHTML = `<pre>${pathText}</pre>`;
             }
         },
 
         // Converts map coordinates to Mufasa-style coordinates
         _convertMapCoords: function (lat, lng) {
-            let globalX = parseInt(lng); // Map longitude
-            let globalY = parseInt(lat); // Map latitude
-            let plane = this._map.getPlane(); // Get the current plane
-
-            // Convert to chunk-relative coordinates
+            let globalX = parseInt(lng);
+            let globalY = parseInt(lat);
+            let plane = this._map.getPlane();  // Get the current plane
             let converted = this.convert(plane, globalX, globalY);
-
-            // Calculate the world X and Y based on chunk and relative coordinates
-            let chunkX = converted.i;
-            let chunkY = converted.j;
-            let worldX = chunkX * 256 + converted.x;
-            let worldY = chunkY * 256 + (255 - converted.y); // Invert the Y-axis within the chunk
-
-            return `${worldX}, ${worldY}, ${plane}`;
+            let deConverted = this.deConvert(plane, converted.i, converted.j, converted.x, converted.y);
+            let modifiedX = deConverted.globalX * 4;
+            let modifiedY = deConverted.globalY * 4 - 254;
+            return `${modifiedX}, ${modifiedY}, ${plane}`;
         },
 
         convert: function (_plane, _globalX, _globalY) {
