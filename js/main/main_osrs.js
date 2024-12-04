@@ -319,12 +319,9 @@ void function (global) {
             if (this.pathPoints.length > 0) {
                 let pathText = 'Tile[] path = new Tile[] {\n';
                 this.pathPoints.forEach((point, index) => {
-                    // Convert the map coordinates to Mufasa-style coordinates
-                    let convertedCoords = this._convertMapCoords(point.lat, point.lng);
-
-                    pathText += `\tnew Tile(${convertedCoords})`;
+                    pathText += `\tnew Tile(${point.coords})`;
                     if (index < this.pathPoints.length - 1) {
-                        pathText += ',\n'; // Add a comma between coordinates, except the last one
+                        pathText += ',\n';  // Add a comma between coordinates, except the last one
                     }
                 });
                 pathText += '\n};';
@@ -508,7 +505,7 @@ void function (global) {
             }
 
             chunkData += chunkStrings.join(',\n') + '\n}, "';
-            chunkData += Array.from(planesSet).sort().join('"-"') + '");\n';
+            chunkData += Array.from(planesSet).sort().join('", "') + '");\n';
 
             this._textbox.innerHTML = `<pre>${chunkData}</pre>`;
         },
