@@ -342,17 +342,11 @@ void function (global) {
             // Convert to chunk-relative coordinates
             let converted = this.convert(plane, globalX, globalY);
 
-            // Chunk-relative position
-            let localX = converted.x;
-            let localY = converted.y;
-
-            // Calculate chunk indices
+            // Calculate the world X and Y based on chunk and relative coordinates
             let chunkX = converted.i;
             let chunkY = converted.j;
-
-            // World coordinates based on chunk-relative values
-            let worldX = localX + (chunkX * 256); // Adjust for chunk size (64 units per chunk)
-            let worldY = (chunkY * 256) + (255 - localY); // Flip Y-axis and adjust for chunk size
+            let worldX = chunkX * 256 + converted.x;
+            let worldY = chunkY * 256 + (255 - converted.y); // Invert the Y-axis within the chunk
 
             return `${worldX}, ${worldY}, ${plane}`;
         },
