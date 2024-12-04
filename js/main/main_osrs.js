@@ -319,24 +319,12 @@ void function (global) {
             if (this.pathPoints.length > 0) {
                 let pathText = 'Tile[] path = new Tile[] {\n';
                 this.pathPoints.forEach((point, index) => {
-                    // Extract the current X, Y, and plane values
-                    let [x, y, plane] = point.coords.split(', ').map(Number);
-
-                    // Convert the Y-coordinate to Mufasa-style
-                    let mufasaY = y * 4 - 254;
-
-                    // Reconstruct the converted coordinate string
-                    let convertedCoords = `${x}, ${mufasaY}, ${plane}`;
-
-                    // Add the converted Tile to the path text
-                    pathText += `\tnew Tile(${convertedCoords})`;
+                    pathText += `\tnew Tile(${point.coords})`;
                     if (index < this.pathPoints.length - 1) {
-                        pathText += ',\n'; // Add a comma between coordinates, except the last one
+                        pathText += ',\n';  // Add a comma between coordinates, except the last one
                     }
                 });
                 pathText += '\n};';
-
-                // Update the text box with the final path
                 this._textbox.innerHTML = `<pre>${pathText}</pre>`;
             }
         },
